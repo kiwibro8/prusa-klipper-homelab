@@ -1,17 +1,31 @@
-# Raspberry Pi 4 Security, Privacy & VPN Homelab Stack
+# Homelab Services
 
-Acest pachet instaleaz? ?i configureaz? automat:
-1. **Pi-hole (DNS AdBlocker)**: Blocheaz? reclamele ?i trackerii pe tot routerul/re?eaua de acas?.
-2. **Tailscale (Mesh VPN Privat)**: ??i ofer? acces criptat de oriunde la Raspberry Pi, la Prusa ?i la scraperul OLX, f?r? port-forwarding.
-3. **Uptime Kuma**: Monitorizeaz? disponibilitatea serviciilor (PrusaLink, OLX Bot, Internet).
-4. **Portainer**: Interfa?? web grafic? pentru Docker.
+Docker stack running alongside Klipper on the Raspberry Pi 4.
 
-### Cum ?l rulezi c?nd ??i sose?te Raspberry Pi 4:
+## Services & Ports
+
+- **Pi-hole**: DNS sinkhole on port `53`, web dashboard on port `8088` (`http://<pi-ip>:8088/admin`).
+- **Tailscale**: Host networking VPN for secure remote access without port forwarding.
+- **Uptime Kuma**: Monitoring dashboard on port `3001`.
+- **Portainer**: Docker management UI on port `9000`.
+
+## Quick Start
+
 ```bash
-# 1. Copiaz? folderul pe Pi sau cloneaz?-l
-cd deploy/pi4_homelab
-
-# 2. F? scriptul executabil ?i ruleaz?-l
+cd homelab
 chmod +x setup.sh
 ./setup.sh
+```
+
+Or run compose directly:
+
+```bash
+cd homelab
+docker compose up -d
+```
+
+To link Tailscale on initial start:
+
+```bash
+docker exec -it tailscale tailscale up
 ```

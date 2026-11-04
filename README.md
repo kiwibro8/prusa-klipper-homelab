@@ -1,70 +1,62 @@
-# 🖨️ Prusa i3 MK3S Klipper & Raspberry Pi 4 Homelab
+# Prusa MK3S Klipper Config & Pi 4 Homelab
 
-Configuration repository for **Prusa i3 MK3S (Bear 2.1 Frame + Bondtech BMG + E3D V6)** running **Klipper + Moonraker + Mainsail** and the **24/7 Raspberry Pi 4 Homelab Stack** (Tailscale Mesh VPN, Pi-hole DNS, Uptime Kuma monitoring, Portainer).
+Configuration files for a Prusa i3 MK3S running Klipper, plus a small Docker-based homelab stack hosted on the same Raspberry Pi 4.
 
----
+## Hardware Setup
 
-## 🛠️ Hardware Setup
+- **Printer**: Prusa i3 MK3S with a Bear 2.1 aluminum extrusion frame
+- **Extruder / Hotend**: Bondtech BMG geared extruder (3:1) with an E3D V6 all-metal hotend
+- **Probe**: SuperPINDA
+- **Mainboard**: Ultimachine Einsy RAMBo 1.1a (ATmega2560, TMC2130 drivers on SPI, sensorless homing on X/Y)
+- **Host SBC**: Raspberry Pi 4 Model B (4GB), connected to the Einsy board over UART (`/dev/ttyAMA0`)
 
-- **Printer**: Original Prusa i3 MK3S with Bear 2.1 Full Extrusion Frame
-- **Extruder**: Bondtech BMG Extruder with E3D V6 All-Metal Hotend
-- **Controller Board**: Ultimachine Einsy RAMBo 1.1a (ATmega2560 @ 16MHz, UART0)
-- **Host SBC**: Raspberry Pi 4 Model B (4GB RAM) running Raspberry Pi OS (64-bit)
-- **Firmware / UI**: Klipper Firmware + Moonraker API + Mainsail Web Interface + Mobileraker & OctoApp Companion
+## Software Stack
 
----
+- **Klipper**: Core printer firmware
+- **Moonraker**: Web API and update manager
+- **Mainsail**: Primary web interface
+- **KAMP**: Klipper Adaptive Meshing and Purging for faster print starts
+- **Mobileraker & OctoApp**: Mobile push notifications and status tracking
 
-## 📁 Repository Structure
+## Repository Layout
 
 ```text
 ├── klipper/
-│   ├── printer.cfg          # Live primary Klipper hardware configuration
-│   ├── moonraker.conf       # Moonraker API server configuration & update manager
-│   ├── mainsail.cfg         # Mainsail macro library and client variables
-│   ├── mobileraker.conf     # Mobile notifications and telemetry push
-│   ├── octoapp.conf         # OctoApp plugin configuration
-│   ├── KAMP_Settings.cfg    # Klipper Adaptive Meshing & Purging settings
-│   └── history/             # Tuning archives and previous revision backups
-│       ├── printer.cfg.current
-│       ├── printer.cfg.fixed
-│       ├── printer.cfg.working_clean
-│       └── ...
-├── homelab/
-│   ├── docker-compose.yml   # Multi-service stack (Tailscale, Pi-hole, Uptime Kuma, Portainer)
-│   ├── setup.sh             # 1-Click setup script for Raspberry Pi OS
-│   └── README.md            # Homelab installation and port forwarding guide
-└── tools/
-    └── prusalink_bridge.py  # Local PrusaLink / Moonraker status bridge
+│   ├── printer.cfg          # Active Klipper configuration
+│   ├── mainsail.cfg         # Mainsail macros and pause/resume logic
+│   ├── moonraker.conf       # Moonraker configuration and update channels
+│   ├── KAMP_Settings.cfg    # Adaptive bed mesh & purge parameters
+│   ├── mobileraker.conf     # Mobile notifications config
+│   ├── octoapp.conf         # OctoApp plugin config
+│   └── history/             # Calibration archives and backup configs
+└── homelab/
+    ├── docker-compose.yml   # Pi-hole, Tailscale, Uptime Kuma, Portainer
+    ├── setup.sh             # Initial setup script for the Pi
+    └── README.md            # Service details and port map
 ```
 
----
+## Homelab Services
 
-## 🚀 Homelab Docker Stack
+The Pi 4 runs a few lightweight home network utilities in Docker containers alongside Klipper:
 
-The Raspberry Pi 4 hosts essential local infrastructure using Docker:
+- **Pi-hole**: Network-wide DNS ad-blocking (`53`, web UI on `8088`)
+- **Tailscale**: Private mesh VPN for remote access outside the local network
+- **Uptime Kuma**: Self-hosted uptime monitoring (`3001`)
+- **Portainer**: Web UI for inspecting containers (`9000`)
 
-| Service | Port | Description |
-|---|---|---|
-| **Tailscale** | Mesh VPN | Zero-config remote access from any phone or laptop |
-| **Pi-hole** | `53`, `8088` | Network-wide ad & tracker blocking DNS sinkhole |
-| **Uptime Kuma** | `3001` | Service monitoring & latency alerts |
-| **Portainer** | `9000` | Web GUI for Docker container management |
-| **Mainsail / Klipper** | `80` | Local 3D printer web dashboard |
+To start or update the services:
 
-To deploy or update the homelab services:
 ```bash
 cd homelab
 docker compose pull
 docker compose up -d
 ```
 
----
+## Deploying Config Updates
 
-## 🔧 Syncing Klipper Configs to Pi
+Changes to `printer.cfg` can be edited directly through the Mainsail web interface, or copied over SSH:
 
-To upload changes from this repository to the active printer on the Pi:
 ```bash
-scp klipper/printer.cfg pi@<YOUR-PI-IP>:/home/pi/printer_data/config/printer.cfg
-ssh pi@<YOUR-PI-IP> "systemctl restart klipper"
+scp klipper/printer.cfg pi@<PI_IP>:/home/pi/printer_data/config/printer.cfg
+ssh pi@<PI_IP> "systemctl restart klipper"
 ```
-Or use the Mainsail Web Interface configuration editor.

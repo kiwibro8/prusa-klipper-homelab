@@ -1,9 +1,7 @@
 version: "3.8"
 
 services:
-  # -------------------------------------------------------------------------
-  # 1. Pi-hole: Network-wide Ad & Tracker Blocker
-  # -------------------------------------------------------------------------
+  # Pi-hole: Network-wide DNS ad-blocking
   pihole:
     container_name: pihole
     image: pihole/pihole:latest
@@ -11,10 +9,10 @@ services:
     ports:
       - "53:53/tcp"
       - "53:53/udp"
-      - "8088:80/tcp"  # Web Admin Dashboard at http://<pi-ip>:8088/admin
+      - "8088:80/tcp"
     environment:
       TZ: "Europe/Bucharest"
-      WEBPASSWORD: "ChangeMeAdmin2026!" # Parola initiala pentru dashboard-ul web
+      WEBPASSWORD: "ChangeMeAdmin2026!"
       DNSMASQ_USER: "root"
       FTLCONF_LOCAL_IPV4: "0.0.0.0"
     volumes:
@@ -25,9 +23,7 @@ services:
       - NET_RAW
       - NET_BIND_SERVICE
 
-  # -------------------------------------------------------------------------
-  # 2. Tailscale: Zero-Config Mesh VPN (Access from phone/laptop anywhere)
-  # -------------------------------------------------------------------------
+  # Tailscale: Remote access mesh
   tailscale:
     container_name: tailscale
     image: tailscale/tailscale:latest
@@ -43,27 +39,23 @@ services:
       - NET_ADMIN
       - NET_RAW
 
-  # -------------------------------------------------------------------------
-  # 3. Uptime Kuma: Beautiful Service Monitor (OLX Bot, PrusaLink, Pi-hole)
-  # -------------------------------------------------------------------------
+  # Uptime Kuma: Local service monitoring
   uptime-kuma:
     container_name: uptime-kuma
     image: louislam/uptime-kuma:1
     restart: unless-stopped
     ports:
-      - "3001:3001"  # Web Dashboard at http://<pi-ip>:3001
+      - "3001:3001"
     volumes:
       - ./data/uptime-kuma:/app/data
 
-  # -------------------------------------------------------------------------
-  # 4. Portainer: Web GUI for 1-Click Docker Management
-  # -------------------------------------------------------------------------
+  # Portainer: Docker web dashboard
   portainer:
     container_name: portainer
     image: portainer/portainer-ce:latest
     restart: unless-stopped
     ports:
-      - "9000:9000"  # Web UI at http://<pi-ip>:9000
+      - "9000:9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/portainer:/data

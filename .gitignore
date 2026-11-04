@@ -19,3 +19,7 @@ venv/
 *.gcode
 gcode/
 
+# Docker volumes & local data
+data/
+homelab/data/
+*.log
