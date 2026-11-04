@@ -1,0 +1,969 @@
+# ==============================================================================
+# Prusa i3 MK3S (Bear 2.1 Frame + Bondtech BMG + E3D V6) - Klipper Configuration
+# Board: Ultimachine Einsy RAMBo 1.1a (ATmega2560 @ 16MHz, UART0)
+# Host: Raspberry Pi 4 (4GB) running Klipper + Moonraker + Mainsail
+# ==============================================================================
+
+[include mainsail.cfg]
+[include KAMP_Settings.cfg]
+
+# ==============================================================================
+# Mainsail Client Variables (Safe E3D V6 Retract, Front-Right Swap Park, Sensor Guard)
+# ==============================================================================
+
+[gcode_macro _CLIENT_VARIABLE]
+variable_use_custom_pos   : True  ; use custom park coordinates for x,y
+variable_custom_park_x    : 240.0 ; park at far right for easy filament swap & purge
+variable_custom_park_y    : 0.0   ; park at front so you can reach the BMG lever easily
+variable_custom_park_dz   : 15.0  ; lift nozzle 15mm on pause for clean access
+variable_retract          : 0.8   ; 0.8mm retract on pause (safe for E3D V6 all-metal)
+variable_cancel_retract   : 0.8   ; 0.8mm retract on cancel (prevents 5mm heatbreak jam!)
+variable_speed_retract    : 35.0  ; retract speed in mm/s
+variable_unretract        : 0.8   ; 0.8mm unretract on resume
+variable_speed_unretract  : 35.0  ; unretract speed in mm/s
+variable_speed_hop        : 15.0  ; z move speed in mm/s
+variable_speed_move       : 100.0 ; park move speed in mm/s
+variable_park_at_cancel   : True  ; automatically park toolhead and present bed when cancelling
+variable_park_at_cancel_x : 0.0   ; park carriage left on cancel
+variable_park_at_cancel_y : 200.0 ; push bed forward on cancel
+variable_use_fw_retract   : True  ; use firmware retraction
+variable_idle_timeout     : 43200 ; keep bed warm for up to 12 hours when paused for filament runout!
+variable_runout_sensor    : "filament_switch_sensor fsensor" ; block RESUME if filament is still empty!
+gcode:
+
+[gcode_macro SEARCH_VARS]
+description: Search Klipper state variables (Usage: SEARCH_VARS S="extruder")
+gcode:
+    {% set search = params.S|lower %}
+    {% set ns = namespace() %}
+    {% for item in printer  %}
+        {% if ' ' in item %}
+            {% set ns.path = ['printer', "['%s']" % (item), ''] %}
+        {% else %}
+            {% set ns.path = ['printer.', item, ''] %}
+        {% endif %}
+        {% if search in ns.path|lower %}
+            { action_respond_info(ns.path|join) }
+        {% endif %}
+        {% if printer[item].items() %}
+            {% for childkey, child in printer[item].items() recursive %}
+                {% set ns.path = ns.path[:loop.depth|int + 1] %}
+                {% if ' ' in childkey %}
+                    {% set null = ns.path.append("['%s']" % (childkey)) %}
+                {% else %}
+                    {% set null = ns.path.append(".%s" % (childkey)) %}
+                {% endif %}
+                {% if child is mapping  %}
+                    { loop(child.items()) }
+                {% else %}
+                    {% if search in ns.path|lower %}
+                        { action_respond_info("%s : %s" % (ns.path|join, child)) }
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
+
+[mcu]
+serial: /dev/serial/by-id/usb-Prusa_Research__prusa3d.com__Original_Prusa_i3_MK3____________________-if00
+restart_method: arduino
+
+[printer]
+kinematics: cartesian
+max_velocity: 300
+max_accel: 3000
+max_z_velocity: 12
+max_z_accel: 200
+square_corner_velocity: 5.0
+
+# ==============================================================================
+# X / Y / Z Steppers & Trinamic TMC2130 Hardware SPI Configuration
+# ==============================================================================
+
+[stepper_x]
+step_pin: PC0
+dir_pin: !PL0
+enable_pin: !PA7
+microsteps: 16
+rotation_distance: 32
+endstop_pin: tmc2130_stepper_x:virtual_endstop
+position_endstop: 0
+position_min: 0
+position_max: 250
+homing_speed: 50
+homing_retract_dist: 0
+
+[tmc2130 stepper_x]
+cs_pin: PG0
+interpolate: True
+run_current: 0.281738
+hold_current: 0.281738
+sense_resistor: 0.220
+diag1_pin: !PK2
+driver_IHOLDDELAY: 8
+driver_TPOWERDOWN: 0
+driver_TBL: 2
+driver_TOFF: 3
+driver_HEND: 1
+driver_HSTRT: 5
+driver_PWM_FREQ: 2
+driver_PWM_GRAD: 2
+driver_PWM_AMPL: 230
+driver_PWM_AUTOSCALE: True
+driver_SGT: 3
+stealthchop_threshold: 999999
+
+[stepper_y]
+step_pin: PC1
+dir_pin: PL1
+enable_pin: !PA6
+microsteps: 16
+rotation_distance: 32
+endstop_pin: tmc2130_stepper_y:virtual_endstop
+position_endstop: -4
+position_min: -4
+position_max: 210
+homing_speed: 50
+homing_retract_dist: 0
+
+[tmc2130 stepper_y]
+cs_pin: PG2
+interpolate: True
+run_current: 0.3480291
+hold_current: 0.3480291
+sense_resistor: 0.220
+diag1_pin: !PK7
+driver_IHOLDDELAY: 8
+driver_TPOWERDOWN: 0
+driver_TBL: 2
+driver_TOFF: 3
+driver_HEND: 1
+driver_HSTRT: 5
+driver_PWM_FREQ: 2
+driver_PWM_GRAD: 2
+driver_PWM_AMPL: 235
+driver_PWM_AUTOSCALE: True
+driver_SGT: 3
+stealthchop_threshold: 999999
+
+[stepper_z]
+step_pin: PC2
+dir_pin: !PL2
+enable_pin: !PA5
+microsteps: 16
+rotation_distance: 8
+full_steps_per_rotation: 200
+endstop_pin: probe:z_virtual_endstop
+position_min: -2
+position_max: 210
+homing_speed: 13.333
+
+[tmc2130 stepper_z]
+cs_pin: PK5
+interpolate: True
+run_current: 0.600
+sense_resistor: 0.220
+diag1_pin: !PK6
+driver_IHOLDDELAY: 8
+driver_TPOWERDOWN: 0
+driver_TBL: 2
+driver_TOFF: 3
+driver_HEND: 1
+driver_HSTRT: 5
+driver_PWM_FREQ: 2
+driver_PWM_GRAD: 4
+driver_PWM_AMPL: 200
+driver_PWM_AUTOSCALE: True
+driver_SGT: 4
+
+# ==============================================================================
+# Extruder: Bondtech BMG (3:1 Gear Ratio) + Genuine E3D V6 All-Metal (0.4mm)
+# ==============================================================================
+
+[extruder]
+step_pin: PC3
+dir_pin: PL6
+enable_pin: !PA4
+microsteps: 16
+rotation_distance: 7.711
+nozzle_diameter: 0.400
+filament_diameter: 1.750
+max_extrude_only_distance: 200.0
+max_extrude_only_velocity: 120.0
+max_extrude_only_accel: 1250.0
+max_extrude_cross_section: 50.0
+heater_pin: PE5
+sensor_type: ATC Semitec 104GT-2
+sensor_pin: PF0
+#control: pid
+#pid_Kp: 16.13
+#pid_Ki: 1.1625
+#pid_Kd: 56.23
+min_temp: 0
+max_temp: 305
+min_extrude_temp: 170
+pressure_advance: 0.045
+pressure_advance_smooth_time: 0.040
+
+[tmc2130 extruder]
+cs_pin: PK4
+interpolate: True
+run_current: 0.480
+sense_resistor: 0.220
+diag1_pin: !PK3
+driver_IHOLDDELAY: 8
+driver_TPOWERDOWN: 0
+driver_TBL: 2
+driver_TOFF: 3
+driver_HEND: 1
+driver_HSTRT: 5
+driver_PWM_FREQ: 2
+driver_PWM_GRAD: 4
+driver_PWM_AMPL: 240
+driver_PWM_AUTOSCALE: True
+driver_SGT: 3
+
+[firmware_retraction]
+retract_length: 0.8
+retract_speed: 35
+unretract_extra_length: 0
+unretract_speed: 35
+
+# ==============================================================================
+# Prusa MK52 Magnetic Heatbed
+# ==============================================================================
+
+[heater_bed]
+heater_pin: PG5
+sensor_type: EPCOS 100K B57560G104F
+sensor_pin: PF2
+control: pid
+pid_Kp: 126.13
+pid_Ki: 4.3
+pid_Kd: 924.76
+min_temp: 0
+max_temp: 125
+
+# ==============================================================================
+# SuperPINDA Inductive Probe & 7x7 Bed Mesh Leveling
+# ==============================================================================
+
+[probe]
+pin: ^PB4
+x_offset: 23.0
+y_offset: 5.0
+#z_offset: 1.000
+speed: 10.0
+samples: 1
+sample_retract_dist: 1.0
+lift_speed: 15.0
+
+[safe_z_home]
+home_xy_position: 102, 100
+speed: 50.0
+z_hop: 5.0
+z_hop_speed: 15.0
+
+[bed_mesh]
+speed: 200
+horizontal_move_z: 2
+mesh_min: 24, 6
+mesh_max: 241, 205
+probe_count: 7, 7
+mesh_pps: 2, 2
+algorithm: bicubic
+bicubic_tension: 0.2
+fade_start: 1.0
+fade_end: 10.0
+adaptive_margin: 5
+
+[screws_tilt_adjust]
+# Coordinates so the SuperPINDA (+23, +5 offset) probes directly over MK52 bed standoffs
+screw1: 102, 100
+screw1_name: Center (Reference)
+screw2: 0, 1
+screw2_name: Front Left
+screw3: 205, 1
+screw3_name: Front Right
+screw4: 205, 199
+screw4_name: Rear Right
+screw5: 0, 199
+screw5_name: Rear Left
+speed: 150
+horizontal_move_z: 5
+screw_thread: CCW-M3
+
+[idle_timeout]
+timeout: 1800
+
+# ==============================================================================
+# Fans & Temperature Sensors (Einsy RAMBo + Raspberry Pi 4)
+# ==============================================================================
+
+[heater_fan hotend_fan]
+pin: PH5
+heater: extruder
+heater_temp: 50.0
+fan_speed: 1.0
+tachometer_pin: ^PE6
+tachometer_poll_interval: 0.0015
+
+[fan]
+pin: PH3
+tachometer_pin: ^PE7
+tachometer_poll_interval: 0.0015
+
+[temperature_sensor einsy_board]
+sensor_pin: PF6
+sensor_type: TDK NTCG104LH104JT1
+min_temp: 0
+max_temp: 75
+
+[temperature_sensor raspberry_pi]
+sensor_type: temperature_host
+min_temp: 10
+max_temp: 85
+
+# ==============================================================================
+# Onboard RepRapDiscount 2004 LCD & Rotary Encoder + Beeper (MK3S Stock LCD)
+# ==============================================================================
+
+[display]
+lcd_type: hd44780
+rs_pin: PD5
+e_pin: PF7
+d4_pin: PF5
+d5_pin: PG4
+d6_pin: PH7
+d7_pin: PG3
+encoder_pins: ^PJ1, ^PJ2
+click_pin: ^!PH6
+line_length: 20
+menu_timeout: 40
+
+[output_pin BEEPER_pin]
+pin: PH2
+pwm: True
+value: 0
+shutdown_value: 0
+cycle_time: 0.001
+scale: 1000
+
+[static_digital_output yellow_led]
+pins: !PB7
+
+# ==============================================================================
+# TMC Autotune - Optimal Trinamic Register Math for MK3S Bear Steppers
+# ==============================================================================
+
+[motor_constants moons-17hd22017-22b]
+# Moons' Industries 17HD22017-22B (~34mm NEMA 17, 1.8° step angle)
+resistance: 2.4
+inductance: 0.0045
+holding_torque: 0.34
+max_current: 1.30
+steps_per_revolution: 200
+
+[autotune_tmc stepper_x]
+# Verified Hardware: Moons' 17HD22017-22B
+motor: moons-17hd22017-22b
+tuning_goal: silent
+sgt: 3
+
+[autotune_tmc stepper_y]
+# Verified Hardware: Moons' 17HD22017-22B
+motor: moons-17hd22017-22b
+tuning_goal: silent
+sgt: 3
+
+# ==============================================================================
+# Custom 2004 LCD UI Dashboard & Menu (Prusa-Inspired Modern Layout)
+# ==============================================================================
+
+# --- Custom 5x8 Hardware Glyphs (HD44780 CGRAM Slots 0-7) ---
+
+[display_glyph extruder]
+hd44780_slot: 0
+hd44780_data:
+  .****
+  .****
+  .*..*
+  .****
+  .****
+  ..**.
+  ..**.
+  ...*.
+
+[display_glyph bed]
+hd44780_slot: 1
+hd44780_data:
+  .....
+  .....
+  .....
+  .....
+  .****
+  *****
+  .*..*
+  .....
+
+[display_glyph bed_heat1]
+hd44780_slot: 1
+hd44780_data:
+  .*..*
+  ..*..
+  .*..*
+  .....
+  .****
+  *****
+  .*..*
+  .....
+
+[display_glyph bed_heat2]
+hd44780_slot: 1
+hd44780_data:
+  ..*..
+  .*..*
+  ..*..
+  .....
+  .****
+  *****
+  .*..*
+  .....
+
+[display_glyph fan1]
+hd44780_slot: 2
+hd44780_data:
+  .....
+  .*.*.
+  ..*..
+  *****
+  ..*..
+  .*.*.
+  .....
+  .....
+
+[display_glyph fan2]
+hd44780_slot: 2
+hd44780_data:
+  .....
+  ..*..
+  .*.*.
+  ..*..
+  .*.*.
+  ..*..
+  .....
+  .....
+
+[display_glyph feedrate]
+hd44780_slot: 3
+hd44780_data:
+  .*...
+  ..*..
+  ***.*
+  ..*..
+  .*..*
+  ..***
+  ...*.
+  .....
+
+[display_glyph clock]
+hd44780_slot: 4
+hd44780_data:
+  .***.
+  *.*.*
+  *.*.*
+  *..**
+  *...*
+  .***.
+  .....
+  .....
+
+[display_glyph degrees]
+hd44780_slot: 5
+hd44780_data:
+  .**..
+  *..*.
+  *..*.
+  .**..
+  .....
+  .....
+  .....
+  .....
+
+[display_glyph z_height]
+hd44780_slot: 6
+hd44780_data:
+  *****
+  ...*.
+  ..*..
+  .*...
+  *****
+  .....
+  ..*..
+  .***.
+
+[display_glyph filament]
+hd44780_slot: 7
+hd44780_data:
+  .***.
+  *...*
+  *.*.*
+  *...*
+  .***.
+  ..*..
+  ..*..
+  ..*..
+
+# --- Custom 20x4 Home Screen Layout (Overrides _default_20x4) ---
+
+# Row 0 Left: Hotend Temp + Target
+[display_data _default_20x4 extruder]
+position: 0, 0
+text: { render("_heater_temperature", param_heater_name="extruder") }
+
+# Row 0 Right: Bed Temp + Animated Heating + Target
+[display_data _default_20x4 heater_bed]
+position: 0, 10
+text: { render("_heater_temperature", param_heater_name="heater_bed") }
+
+# Row 1 Left: Live Z Height + Homed Indicator (replaces unused extruder1 slot!)
+[display_data _default_20x4 extruder1]
+position: 1, 0
+text:
+  ~z_height~
+  {% if "z" in printer.toolhead.homed_axes %}
+    { "%6.2fmm" % (printer.gcode_move.gcode_position.z,) }
+  {% else %}
+    { "  ---   " }
+  {% endif %}
+
+# Row 1 Right: Animated Cooling Fan + Filament Sensor Indicator
+[display_data _default_20x4 fan]
+position: 1, 10
+text:
+  {% if 'fan' in printer %}
+    {% set speed = printer.fan.speed %}
+    {% if speed > 0.0 %}
+      {% set frame = (printer.toolhead.estimated_print_time|int % 2) + 1 %}
+      ~fan{frame}~
+    {% else %}
+      ~fan1~
+    {% endif %}
+    { "{:>4.0%} ".format(speed) }
+  {% endif %}
+  ~filament~
+  {% if printer["filament_switch_sensor fsensor"].filament_detected %}
+    { "OK" }
+  {% else %}
+    { "--" }
+  {% endif %}
+
+# Row 2 Left: Feedrate %
+[display_data _default_20x4 speed_factor]
+position: 2, 0
+text:
+  ~feedrate~
+  { "{:>4.0%}".format(printer.gcode_move.speed_factor) }
+
+# Row 2 Center: Print Progress % OR Live Layer Counter (Cycles every 4s while printing!)
+[display_data _default_20x4 print_progress]
+position: 2, 6
+text:
+  {% if printer.idle_timeout.state == "Printing" and printer.print_stats.info.total_layer %}
+    {% if (printer.toolhead.estimated_print_time|int % 6) < 3 %}
+      { "L{:>3d}/{:<3d}".format(printer.print_stats.info.current_layer|default(0)|int, printer.print_stats.info.total_layer|int) }
+    {% else %}
+      { "  {:^4.0%}  ".format(printer.display_status.progress) }
+    {% endif %}
+  {% else %}
+    { "  {:^4.0%}  ".format(printer.display_status.progress) }
+  {% endif %}
+
+# Row 2 Right: Print Elapsed Time
+[display_data _default_20x4 printing_time]
+position: 2, 14
+text:
+  ~clock~
+  { render("_printing_time") }
+
+# Row 3 Full 20-Char Smart Status Bar
+[display_data _default_20x4 print_status]
+position: 3, 0
+text:
+  {% if printer.display_status.message %}
+    { "%-20.20s" % (printer.display_status.message,) }
+  {% elif printer.idle_timeout.printing_time %}
+    {% set pos = printer.gcode_move.gcode_position %}
+    {% set spd = printer.motion_report.live_velocity|default(0.0) %}
+    { "X%-3.0f Y%-3.0f %4.0fmm/s" % (pos.x, pos.y, spd) }
+  {% else %}
+    {% set pi_temp = printer["temperature_sensor raspberry_pi"].temperature|default(0.0) %}
+    { "MK3S Bear  Pi:%4.1fC" % (pi_temp,) }
+  {% endif %}
+
+# ==============================================================================
+# Custom 2004 LCD Menu Items (BMG Load/Unload, Bear Z-Align, Preheats, Cleanups)
+# ==============================================================================
+
+# Hide obsolete OctoPrint and ABS menus
+[menu __main __octoprint]
+type: list
+enable: False
+name: OctoPrint
+
+[menu __main __temp __preheat_abs]
+type: list
+enable: False
+name: Preheat ABS
+
+# Upgrade built-in Preheat PLA to your 195/55 Sunlu PLA Meta settings
+[menu __main __temp __preheat_pla __all]
+type: command
+enable: {('extruder' in printer) and ('heater_bed' in printer)}
+name: Preheat all (195/55)
+gcode:
+    M140 S55
+    M104 S195
+
+[menu __main __temp __preheat_pla __hotend]
+type: command
+enable: {'extruder' in printer}
+name: Preheat hotend (195)
+gcode: M104 S195
+
+[menu __main __temp __preheat_pla __hotbed]
+type: command
+enable: {'heater_bed' in printer}
+name: Preheat hotbed (55)
+gcode: M140 S55
+
+# Add Preheat PETG under Temperature menu
+[menu __main __temp __preheat_petg]
+type: list
+name: Preheat PETG
+
+[menu __main __temp __preheat_petg __all]
+type: command
+enable: {('extruder' in printer) and ('heater_bed' in printer)}
+name: Preheat all (240/85)
+gcode:
+    M140 S85
+    M104 S240
+
+[menu __main __temp __preheat_petg __hotend]
+type: command
+enable: {'extruder' in printer}
+name: Preheat hotend (240)
+gcode: M104 S240
+
+[menu __main __temp __preheat_petg __hotbed]
+type: command
+enable: {'heater_bed' in printer}
+name: Preheat hotbed (85)
+gcode: M140 S85
+
+# Fix built-in Filament Menu to use BMG LOAD_FILAMENT / UNLOAD_FILAMENT macros
+[menu __main __filament __loadf]
+type: command
+name: Load Filament (BMG)
+gcode:
+    LOAD_FILAMENT
+
+[menu __main __filament __loads]
+type: command
+enable: False
+name: Load Fil. slow
+gcode:
+
+[menu __main __filament __unloadf]
+type: command
+name: Unload Fil. (BMG)
+gcode:
+    UNLOAD_FILAMENT
+
+[menu __main __filament __unloads]
+type: command
+enable: False
+name: Unload Fil.slow
+gcode:
+
+[menu __main __filament __purge]
+type: command
+name: Purge 25mm
+gcode:
+    SAVE_GCODE_STATE NAME=__filament__load
+    M83
+    G1 E25 F300
+    RESTORE_GCODE_STATE NAME=__filament__load
+
+# Top-Level Bear & BMG Quick Menu (Index 1 - right at the top!)
+[menu __main __bear]
+type: list
+name: Bear & BMG Tools
+index: 1
+
+[menu __main __bear __z_align]
+type: command
+name: Bear Z-Align
+gcode:
+    Z_ALIGN_BEAR
+
+[menu __main __bear __load_fil]
+type: command
+name: Load Filament (BMG)
+gcode:
+    LOAD_FILAMENT
+
+[menu __main __bear __unload_fil]
+type: command
+name: Unload Fil. (BMG)
+gcode:
+    UNLOAD_FILAMENT
+
+[menu __main __bear __preheat_pla]
+type: command
+name: Preheat PLA 195/55
+gcode:
+    M140 S55
+    M104 S195
+
+[menu __main __bear __preheat_petg]
+type: command
+name: Preheat PETG 240/85
+gcode:
+    M140 S85
+    M104 S240
+
+[menu __main __bear __cooldown]
+type: command
+name: Cooldown All
+gcode:
+    TURN_OFF_HEATERS
+
+# ==============================================================================
+# Useful Features & Macros (Mainsail & OrcaSlicer Optimized)
+# ==============================================================================
+
+[exclude_object]
+[gcode_arcs]
+resolution: 0.1
+[skew_correction]
+[force_move]
+enable_force_move: True
+[respond]
+[pause_resume]
+
+# ==============================================================================
+# Prusa MK3S Optical Filament Runout Sensor (Einsy pin PK0)
+# ==============================================================================
+
+[filament_switch_sensor fsensor]
+pause_on_runout: True
+runout_gcode:
+    M117 Filament Runout Detected!
+    M300 S1000 P200
+    G4 P100
+    M300 S1500 P300
+insert_gcode:
+    M117 Filament Inserted
+    M300 S1500 P150
+switch_pin: ^!PK0
+[display_status]
+
+[gcode_macro M300]
+description: Play tone on LCD beeper
+gcode:
+    {% set S = params.S|default(1000)|int %}
+    {% set P = params.P|default(100)|int %}
+    SET_PIN PIN=BEEPER_pin VALUE=0.5 CYCLE_TIME={ 1.0/S if S > 0 else 1 }
+    G4 P{P}
+    SET_PIN PIN=BEEPER_pin VALUE=0
+
+[gcode_macro M600]
+description: Prusa style M600 Filament Change (Parks front-right at Z>=50mm and unloads)
+gcode:
+    M300 S1500 P200
+    G4 P100
+    M300 S2000 P300
+    PAUSE X=240 Y=0 Z_MIN=50
+
+[gcode_macro M900]
+description: Translate Marlin Linear Advance (M900 Kxx) to Klipper Pressure Advance
+gcode:
+    {% if 'K' in params %}
+        SET_PRESSURE_ADVANCE ADVANCE={params.K|float}
+    {% endif %}
+
+[gcode_macro G80]
+description: Legacy Prusa G80 mesh leveling alias
+gcode:
+    BED_MESH_CALIBRATE ADAPTIVE=1
+
+[gcode_macro START_PRINT]
+description: Prusa MK3S Bear + BMG No-Ooze Start Print Macro (Clean KAMP Integration)
+gcode:
+    {% set BED_TEMP = params.BED_TEMP|default(60)|float %}
+    {% set EXTRUDER_TEMP = params.EXTRUDER_TEMP|default(215)|float %}
+    {% set PA = params.PA|default(0.045)|float %}
+
+    G90 ; Absolute coordinates
+    M83 ; Extruder relative mode
+    M220 S100 ; Reset speed factor to 100%
+    M221 S100 ; Reset flow factor to 100%
+    SET_PRESSURE_ADVANCE ADVANCE={PA}
+
+    ; --- 1. PREHEAT BED & STANDBY NOZZLE (NO OOZE) ---
+    M117 Preheating Bed...
+    M104 S160 ; Warm nozzle to 160C (prevents dripping & PINDA heat soak)
+    M140 S{BED_TEMP} ; Set bed temp
+    M190 S{BED_TEMP} ; Wait for bed temp
+
+    ; --- 2. CALIBRATION (HOME + KAMP ADAPTIVE MESH) ---
+    M117 Homing & Adaptive Mesh...
+    G28 ; Home all axes cleanly
+    BED_MESH_CLEAR
+    BED_MESH_CALIBRATE ; KAMP automatically intercepts this and probes ONLY the model area!
+
+    ; --- 3. SMART PARK & FINAL HEATING ---
+    M117 Heating Nozzle...
+    Smart_Park ; KAMP parks nozzle 3mm above bed right next to the print area
+    M109 S{EXTRUDER_TEMP}
+    M300 S1200 P80 ; Ready beep
+
+    ; --- 4. KAMP ADAPTIVE LINE PURGE ---
+    M117 Adaptive Purge...
+    LINE_PURGE ; KAMP adaptive purge right in front of the part
+    M117 Printing...
+
+[gcode_macro PID_HOTEND]
+description: Quick PID tune for E3D V6 Hotend (default 215C)
+gcode:
+    {% set TEMP = params.TEMP|default(215)|float %}
+    M106 S64 ; 25% part fan during PID for realistic printing conditions
+    PID_CALIBRATE HEATER=extruder TARGET={TEMP}
+    M107
+    SAVE_CONFIG
+
+[gcode_macro PID_BED]
+description: Quick PID tune for MK52 Heatbed (default 60C)
+gcode:
+    {% set TEMP = params.TEMP|default(60)|float %}
+    PID_CALIBRATE HEATER=heater_bed TARGET={TEMP}
+    SAVE_CONFIG
+
+[gcode_macro END_PRINT]
+description: Prusa MK3S Bear + BMG Smart End Print Macro
+gcode:
+    {% set max_z = printer.toolhead.axis_maximum.z|float %}
+    {% set act_z = printer.toolhead.position.z|float %}
+    {% set lift_z = [act_z + 48.0, max_z]|min %}
+
+    M400 ; Wait for all moves in buffer to complete
+
+    ; --- 1. RETRACT & SAFE CLEARANCE ---
+    G92 E0
+    G91 ; Relative positioning
+    G1 E-0.8 F2400 ; Retract 0.8mm to prevent cold heatbreak neck plugs
+    G1 Z{ [2.0, max_z - act_z]|min } F720 ; Immediate 2mm hop off the model
+    G90 ; Return to absolute positioning
+
+    ; --- 2. PRESENT PART & COOLDOWN ---
+    TURN_OFF_HEATERS ; Turn off hotend & bed heaters immediately
+    M107 ; Turn off part cooling fan
+    G1 X0 Y200 F3600 ; Park carriage left and push bed forward for easy removal
+    G1 Z{lift_z} F720 ; Lift gantry up (+48mm up to 210mm Bear limit) for clearance
+
+    ; --- 3. RESET MODES & MOTORS ---
+    M221 S100 ; Reset flow multiplier to 100%
+    M220 S100 ; Reset speed multiplier to 100%
+    SET_PRESSURE_ADVANCE ADVANCE=0.045 ; Reset PA to baseline
+    M84 ; Disable stepper motors
+    M300 S1000 P120 ; Print finished chime
+    G4 P80
+    M300 S1500 P200
+    M117 Print Complete!
+
+[gcode_macro LOAD_FILAMENT]
+description: Load and purge filament through Bondtech BMG (3:1) + E3D V6
+gcode:
+    {% set target_temp = params.TEMP|default(printer.extruder.target)|float %}
+    {% set load_temp = [target_temp, 190.0]|max if target_temp > 0 else 190.0 %}
+    {% if printer.extruder.temperature < (load_temp - 5) %}
+        M117 Heating to {load_temp}C...
+        M109 S{load_temp}
+    {% endif %}
+    M117 Loading Filament...
+    M83
+    G1 E45 F600 ; Fast load through BMG gears into V6 heatbreak
+    G1 E35 F200 ; Slow purge through 0.4mm nozzle
+    G1 E-0.8 F1800 ; Small retract to stop ooze
+    M400
+    M300 S1500 P150
+    M117 Filament Loaded!
+
+[gcode_macro UNLOAD_FILAMENT]
+description: Tip-shaping unload for Bondtech BMG + E3D V6 All-Metal
+gcode:
+    {% set target_temp = params.TEMP|default(printer.extruder.target)|float %}
+    {% set unload_temp = [target_temp, 190.0]|max if target_temp > 0 else 190.0 %}
+    {% if printer.extruder.temperature < (unload_temp - 5) %}
+        M117 Heating to {unload_temp}C...
+        M109 S{unload_temp}
+    {% endif %}
+    M117 Unloading Filament...
+    M83
+    G1 E5 F300 ; Extrude slightly to melt tip
+    G1 E-15 F3000 ; Fast jerk out of meltzone to form clean tip
+    G4 P2000 ; Cool tip for 2s in heatbreak
+    G1 E-65 F1200 ; Retract completely out of Bondtech BMG gears
+    M400
+    M300 S1200 P150
+    M117 Filament Unloaded!
+
+[gcode_macro Z_ALIGN_BEAR]
+description: Mechanical Gantry Calibration against top Z-tops (Prusa Bear 210mm style)
+gcode:
+    {% if xyz not in printer.toolhead.homed_axes %}
+        G28
+    {% endif %}
+    M117 Aligning Bear Z...
+    G90
+    G1 X125 Y105 F3000
+    G1 Z208 F1000
+    SET_TMC_CURRENT STEPPER=stepper_z CURRENT=0.18
+    FORCE_MOVE STEPPER=stepper_z DISTANCE=6 VELOCITY=4
+    G4 P300
+    FORCE_MOVE STEPPER=stepper_z DISTANCE=-6 VELOCITY=10
+    SET_TMC_CURRENT STEPPER=stepper_z CURRENT=0.600
+    G28 Z
+    M300 S1500 P150
+    M117 Bear Z Aligned!
+
+#*# <---------------------- SAVE_CONFIG ---------------------->
+#*# DO NOT EDIT THIS BLOCK OR BELOW. The contents are auto-generated.
+#*#
+#*# [probe]
+#*# z_offset = 0.377
+#*#
+#*# [extruder]
+#*# control = pid
+#*# pid_kp = 12.924
+#*# pid_ki = 0.706
+#*# pid_kd = 59.128
+#*#
+#*# [bed_mesh default]
+#*# version = 1
+#*# points =
+#*# 	  -0.047500, -0.010000, -0.030000
+#*# 	  -0.042500, -0.005000, -0.032500
+#*# 	  -0.042500, -0.007500, -0.035000
+#*# x_count = 3
+#*# y_count = 3
+#*# mesh_x_pps = 2
+#*# mesh_y_pps = 2
+#*# algo = lagrange
+#*# tension = 0.2
+#*# min_x = 104.001
+#*# max_x = 145.981
+#*# min_y = 95.006
+#*# max_y = 114.98599999999999
