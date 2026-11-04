@@ -15,6 +15,7 @@ venv/
 *.bak
 *~
 
-# OS generated
-.DS_Store
-Thumbs.db
+# G-Code & Large models
+*.gcode
+gcode/
+

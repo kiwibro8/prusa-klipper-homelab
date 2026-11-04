@@ -33,12 +33,6 @@ Configuration repository for **Prusa i3 MK3S (Bear 2.1 Frame + Bondtech BMG + E3
 │   ├── docker-compose.yml   # Multi-service stack (Tailscale, Pi-hole, Uptime Kuma, Portainer)
 │   ├── setup.sh             # 1-Click setup script for Raspberry Pi OS
 │   └── README.md            # Homelab installation and port forwarding guide
-├── gcode/                   # Pre-sliced repair components library (PETG/PLA)
-│   ├── bose_qc_slider.gcode
-│   ├── joycon_rail_latch.gcode
-│   ├── t480_nvme_caddy.gcode
-│   ├── xbox_battery_cover.gcode
-│   └── xm4_hinge_swivel.gcode
 └── tools/
     └── prusalink_bridge.py  # Local PrusaLink / Moonraker status bridge
 ```
@@ -70,7 +64,7 @@ docker compose up -d
 
 To upload changes from this repository to the active printer on the Pi:
 ```bash
-scp klipper/printer.cfg pi@100.126.201.29:/home/pi/printer_data/config/printer.cfg
-ssh pi@100.126.201.29 "systemctl restart klipper"
+scp klipper/printer.cfg pi@<YOUR-PI-IP>:/home/pi/printer_data/config/printer.cfg
+ssh pi@<YOUR-PI-IP> "systemctl restart klipper"
 ```
 Or use the Mainsail Web Interface configuration editor.
